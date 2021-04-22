@@ -326,24 +326,29 @@ c
             endif
 
 c
-c           -- if density mask is enabled, apply it here --
-            if (gencost_useDensityMask(kgen)) then
-c             - first, calculate the scalar density
-              call FIND_RHO_SCALAR(
-     I             theta(i,j,k,bi,bj),
-     I             salt(i,j,k,bi,bj),
-     I             gencost_refPressure(kgen),
-     O             tmpsig,
-     I             mythid)
-c             - do we need to subtract 1000 to get sigma? unclear.
-              tmpsig = tmpsig - 1000
-c             - now, only keep the point if it's within the sigma range
-              if ((tmpsig.LE.gencost_sigmaLow(kgen)).OR.
-     &            (tmpsig.GE.gencost_sigmaHigh(kgen))) then
-                tmpmsk = 0. _d 0
-              endif
+c ---- If density mask is enabled, use it here ----
+            if (salt(i,j,k,bi,bj).GT.0.0) then
+             if (gencost_useDensityMask(kgen)) then
+c            - first, calculate the scalar density
+               call FIND_RHO_SCALAR(
+     I              theta(i,j,k,bi,bj),
+     I              salt(i,j,k,bi,bj),
+     I              gencost_refPressure(kgen),
+     O              tmpsig,
+     I              mythid)
+c            - subtract 1000 to get sigma
+               tmpsig = tmpsig - 1000
+c            - now, tmpmsk is sigmoid times this value
+               tmpsig_lower = (1.0 + tanh(gencost_tanhScale(kgen)
+     &           *(tmpsig-gencost_sigmaLow(kgen))))/2.0
+               tmpsig_upper = 1.0 - ((1.0 + tanh(gencost_tanhScale(kgen)
+     &           *(tmpsig-gencost_sigmaHigh(kgen))))/2.0)
+c             - update mask value based on the sigmoid function
+               tmp_sigmsk = tmpsig_lower*tmpsig_upper
+               tmpmsk = tmpmsk*tmp_sigmsk
+             endif
             endif
-
+c ---- end of density mask (but tmpmsk is used below)
 c
             tmpfld=0. _d 0
             tmpmsk2=0. _d 0
